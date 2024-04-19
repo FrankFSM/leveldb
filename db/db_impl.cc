@@ -2,6 +2,34 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
+/**
+ * Compaction 是 LevelDB 中的一个重要过程，它负责合并和压缩 SSTable 文件（也称为表文件），以减少存储空间的使用和提高查询效率。Compaction 的具体实现主要在 `db/db_impl.cc` 和 `db/version_set.cc` 文件中。
+
+以下是 Compaction 过程的详细说明：
+
+    1. Compaction 的触发时机：Compaction 可以由以下几种情况触发：
+
+    - 当 MemTable 达到一定大小（默认为 4MB）时，会将 MemTable 切换为 Immutable MemTable，并触发一次 Minor Compaction，将 Immutable MemTable 写入到 SSTable 中。这部分逻辑在 `DBImpl::MakeRoomForWrite` 函数中实现。
+
+    - 当某个 Level 的 SSTable 总大小超过预定的阈值时，会触发一次 Compaction，将该 Level 的 SSTable 合并到下一级。这部分逻辑在 `DBImpl::MaybeScheduleCompaction` 函数中实现。
+
+
+    - 当用户调用 `CompactRange` 函数时，会触发一次 Compaction，将指定范围的键值对进行合并。这部分逻辑在 `DBImpl::CompactRange` 函数中实现。
+
+    2. Compaction 的执行过程：Compaction 的执行过程主要包括以下几个步骤：
+
+    - 选择 Compaction：首先，根据当前的数据库状态和配置选项，选择一个最佳的 Compaction 操作。这部分逻辑在 `VersionSet::PickCompaction` 函数中实现。
+
+    - 读取输入文件：然后，为 Compaction 操作的输入文件创建一个迭代器，并读取输入文件中的所有键值对。这部分逻辑在 `Compaction::MakeInputIterator` 函数中实现。
+
+    - 写入输出文件：接着，将读取到的键值对合并排序，并写入到新的 SSTable 文件中。这部分逻辑在 `DBImpl::DoCompactionWork` 函数中实现。
+
+    - 安装 Compaction：最后，将新生成的 SSTable 文件添加到数据库状态中，并删除旧的 SSTable 文件。这部分逻辑在 `DBImpl::InstallCompactionResults` 函数中实现。
+
+          通过这些步骤，Compaction 过程能够有效地合并和压缩 SSTable 文件，从而减少存储空间的使用和提高查询效率。在实际应用中，Compaction 过程是 LevelDB 高性能和高可靠性的关键保证之一。
+ */
+
+
 #include "db/db_impl.h"
 
 #include <algorithm>
@@ -290,13 +318,16 @@ void DBImpl::RemoveObsoleteFiles() {
 }
 
 Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
+  // 确保互斥锁已锁定。这是为了确保在恢复过程中不会有其他线程修改数据库状态。
   mutex_.AssertHeld();
 
+  // 尝试创建数据库目录。如果目录已存在，忽略错误。
   // Ignore error from CreateDir since the creation of the DB is
   // committed only when the descriptor is created, and this directory
   // may already exist from a previous failed creation attempt.
   env_->CreateDir(dbname_);
   assert(db_lock_ == nullptr);
+  // 对数据库文件加锁。这是为了防止多个进程同时访问同一个数据库文件
   Status s = env_->LockFile(LockFileName(dbname_), &db_lock_);
   if (!s.ok()) {
     return s;
@@ -304,6 +335,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
 
   if (!env_->FileExists(CurrentFileName(dbname_))) {
     if (options_.create_if_missing) {
+      // 文件不存在、开启创建
       Log(options_.info_log, "Creating DB %s since it was missing.",
           dbname_.c_str());
       s = NewDB();
@@ -1497,12 +1529,19 @@ DB::~DB() = default;
 Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
   *dbptr = nullptr;
 
+  // 创建DB实现
   DBImpl* impl = new DBImpl(options, dbname);
+  // 锁定DBImpl对象的互斥锁，确保在数据库恢复过程中不会有其他线程修改数据库状态。
   impl->mutex_.Lock();
+  // 创建一个VersionEdit对象，在数据库恢复过程中记录一系列的元数据更改。
   VersionEdit edit;
   // Recover handles create_if_missing, error_if_exists
   bool save_manifest = false;
+  // 调用impl->Recover方法来恢复数据库。这个方法将尝试从现有的数据库文件中恢复数据，
+  // 并根据options参数处理create_if_missing和error_if_exists选项。
+  // 如果数据库恢复成功，save_manifest将被设置为true，表示需要保存新的manifest文件。
   Status s = impl->Recover(&edit, &save_manifest);
+  // 如果恢复成功且内存表（memtable）为空，创建一个新的日志文件和一个对应的内存表。
   if (s.ok() && impl->mem_ == nullptr) {
     // Create new log and a corresponding memtable.
     uint64_t new_log_number = impl->versions_->NewFileNumber();
@@ -1518,15 +1557,19 @@ Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
       impl->mem_->Ref();
     }
   }
+  // 如果需要保存新的manifest文件，更新VersionEdit对象的日志文件号，并将更改应用到版本集合（VersionSet）。
   if (s.ok() && save_manifest) {
     edit.SetPrevLogNumber(0);  // No older logs needed after recovery.
     edit.SetLogNumber(impl->logfile_number_);
     s = impl->versions_->LogAndApply(&edit, &impl->mutex_);
   }
+  // 如果所有操作都成功，删除过时的文件，并安排压缩任务。
   if (s.ok()) {
     impl->RemoveObsoleteFiles();
     impl->MaybeScheduleCompaction();
   }
+
+  // 解锁DBImpl对象的互斥锁。
   impl->mutex_.Unlock();
   if (s.ok()) {
     assert(impl->mem_ != nullptr);

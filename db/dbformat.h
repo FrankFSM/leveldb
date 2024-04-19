@@ -128,6 +128,54 @@ class InternalFilterPolicy : public FilterPolicy {
   bool KeyMayMatch(const Slice& key, const Slice& filter) const override;
 };
 
+
+/**
+ * `InternalKey` 是 LevelDB 中的一个关键数据结构，用于表示内部键。内部键是由用户键和元数据（如序列号、值类型）组成的键，用于在数据库内部进行键值对的组织和管理。`InternalKey` 结构体的定义位于 `db/dbformat.h` 文件中。
+
+以下是 `InternalKey` 结构体的详细说明：
+
+    1. 结构体的作用：`InternalKey` 结构体的主要作用是存储和管理内部键，以便在数据库内部进行键值对的查找、插入、删除等操作。通过使用 `InternalKey` 结构体，LevelDB 可以有效地组织和管理键值对，从而提高数据库的性能和可靠性。此外，`InternalKey` 结构体还提供了一组辅助函数，用于比较、解析和序列化内部键。
+
+    2. 结构体的成员：
+
+    - `rep_`：一个字符串，表示内部键的二进制表示。`InternalKey` 结构体使用 `rep_` 成员来存储内部键的二进制数据。
+
+    3. 结构体的成员函数：
+
+    - `DecodeFrom`：从一个字符串中解码内部键。这个函数接收一个字符串参数，并将其解码为内部键。
+
+    - `Encode`：将内部键编码为一个字符串。这个函数返回一个字符串，表示内部键的二进制表示。
+
+    - `Clear`：清除内部键的数据。这个函数会将 `rep_` 成员设置为空字符串。
+
+    - `user_key`：获取用户键。这个函数返回一个 `Slice` 对象，表示内部键中的用户键部分。
+
+    - `sequence`：获取序列号。这个函数返回一个整数，表示内部键中的序列号部分。
+
+    - `type`：获取值类型。这个函数返回一个枚举值，表示内部键中的值类型部分（如 `kTypeValue`、`kTypeDeletion` 等）。
+
+    - `SetFrom`：从一个用户键和元数据设置内部键。这个函数接收一个用户键、序列号和值类型作为参数，并将它们组合成一个内部键。
+
+    - `SetMaxPossibleForUserKey`：将内部键设置为用户键的最大可能值。这个函数接收一个用户键作为参数，并将内部键设置为该用户键的最大可能值（即序列号和值类型均为最大值）。
+
+    - `SetMinPossibleForUserKey`：将内部键设置为用户键的最小可能值。这个函数接收一个用户键作为参数，并将内部键设置为该用户键的最小可能值（即序列号和值类型均为最小值）。
+
+          通过这些成员变量和成员函数，`InternalKey` 结构体实现了对内部键的存储和管理。在实际应用中，`InternalKey` 结构体在 LevelDB 的各种操作中起到了关键作用，如查询、插入、删除等。
+
+
+
+结构体可以带来以下好处：
+
+1. 更清晰的语义：`InternalKey` 结构体明确表示了内部键的概念，有助于理解 LevelDB 的代码和数据结构。直接使用 `std::string` 可能会使代码的意图变得模糊，降低代码的可读性。
+
+2. 高效的操作：`InternalKey` 结构体提供了一组针对内部键的辅助函数，如 `DecodeFrom`、`Encode`、`user_key`、`sequence` 等。这些函数允许我们高效地对内部键进行解析、比较和序列化，而无需手动处理二进制数据。如果直接使用 `std::string`，我们可能需要为这些操作编写额外的代码，增加了实现的复杂性。
+
+3. 更好的封装：`InternalKey` 结构体将内部键的表示和操作封装在一个单独的类中，有助于保持代码的整洁和模块化。这样，当需要修改内部键的实现时，我们只需修改 `InternalKey` 类，而无需修改其他部分的代码。如果直接使用 `std::string`，内部键的操作可能会分散在整个代码库中，导致代码难以维护和扩展。
+
+4. 更好的可扩展性：`InternalKey` 结构体为未来的功能扩展提供了基础。例如，如果我们需要为内部键添加新的元数据（如时间戳、版本号等），只需修改 `InternalKey` 类即可。如果直接使用 `std::string`，可能需要对整个代码库进行较大的修改，以支持新的功能。
+
+综上所述，虽然直接使用 `std::string` 可以表示内部键，但引入 `InternalKey` 结构体可以带来更清晰的语义、高效的操作、更好的封装和可扩展性。这些优点有助于提高 LevelDB 的性能、可靠性和易用性。
+ */
 // Modules in this directory should keep internal keys wrapped inside
 // the following class instead of plain strings so that we do not
 // incorrectly use string comparisons instead of an InternalKeyComparator.

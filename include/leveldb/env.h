@@ -10,6 +10,38 @@
 // All Env implementations are safe for concurrent access from
 // multiple threads without any external synchronization.
 
+
+/**
+ * `env.h` 文件定义了 `Env` 类，它是 LevelDB 的环境抽象类。`Env` 类提供了一组虚函数，用于访问操作系统相关的功能，如文件 I/O、线程、互斥锁、时间等。以下是 `Env` 类及其成员的详细说明：
+
+1. `Env` 类：此类提供了操作系统相关功能的抽象接口。它包含以下虚函数：
+
+
+    - `CreateDir`：创建一个目录。这个函数接收一个目录名，并返回一个 `Status` 对象，表示操作是否成功。
+
+    - `DeleteFile`：删除一个文件。这个函数接收一个文件名，并返回一个 `Status` 对象，表示操作是否成功。
+
+    - `GetFileSize`：获取一个文件的大小。这个函数接收一个文件名，并返回一个文件大小。
+
+    - `RenameFile`：重命名一个文件。这个函数接收两个文件名，分别表示源文件名和目标文件名，并返回一个 `Status` 对象，表示操作是否成功。
+
+    - `LockFile`：锁定一个文件。这个函数接收一个文件名，并返回一个 `FileLock` 指针。`FileLock` 类表示一个文件锁，用于防止多个进程同时访问同一个文件。
+
+    - `UnlockFile`：解锁一个文件。这个函数接收一个 `FileLock` 指针，并返回一个 `Status` 对象，表示操作是否成功。
+
+    - `GetTestDirectory`：获取一个用于测试的目录。这个函数返回一个目录名，用于存储测试文件。
+
+    - `NewLogger`：创建一个日志记录器对象。这个函数接收一个文件名，并返回一个 `Logger` 指针。`Logger` 类提供了一个 `Logv` 函数，用于记录日志信息。
+
+    - `NowMicros`：获取当前的微秒数。这个函数返回一个 64 位整数，表示从某个固定时间点（如 Unix 纪元）到现在的微秒数。
+
+    - `SleepForMicroseconds`：让当前线程睡眠指定的微秒数。这个函数接收一个 32 位整数，表示睡眠的微秒数。
+
+          2. `EnvWrapper` 类：此类是 `Env` 类的一个简单包装器，它将所有函数调用委托给另一个 `Env` 对象。这个类可以用于实现一些特殊的环境，例如跟踪文件访问、限制 I/O 速率等。你可以通过继承 `EnvWrapper` 类并覆盖其中的部分函数来实现自定义的环境。
+
+          LevelDB 提供了一个默认的 `Env` 实现，它使用操作系统的文件系统和时钟。你可以通过 `Env::Default()` 函数获取这个默认实现的实例。此外，你还可以实现自定义的 `Env` 类，以支持其他平台或存储后端。例如，你可以实现一个基于内存的 `Env` 类，用于加速测试；或者实现一个基于分布式文件系统的 `Env` 类，用于实现分布式数据库。
+ */
+
 #ifndef STORAGE_LEVELDB_INCLUDE_ENV_H_
 #define STORAGE_LEVELDB_INCLUDE_ENV_H_
 
@@ -64,6 +96,7 @@ class LEVELDB_EXPORT Env {
   // The result of Default() belongs to leveldb and must never be deleted.
   static Env* Default();
 
+  // 创建一个顺序读取的文件对象。这个函数接收一个文件名，并返回一个 `SequentialFile` 指针。`SequentialFile` 类提供了一个 `Read` 函数，用于从文件中顺序读取数据。
   // Create an object that sequentially reads the file with the specified name.
   // On success, stores a pointer to the new file in *result and returns OK.
   // On failure stores nullptr in *result and returns non-OK.  If the file does
@@ -74,6 +107,7 @@ class LEVELDB_EXPORT Env {
   virtual Status NewSequentialFile(const std::string& fname,
                                    SequentialFile** result) = 0;
 
+  // 创建一个随机访问的文件对象。这个函数接收一个文件名，并返回一个 `RandomAccessFile` 指针。`RandomAccessFile` 类提供了一个 `Read` 函数，用于从文件中随机读取数据。
   // Create an object supporting random-access reads from the file with the
   // specified name.  On success, stores a pointer to the new file in
   // *result and returns OK.  On failure stores nullptr in *result and
@@ -85,6 +119,7 @@ class LEVELDB_EXPORT Env {
   virtual Status NewRandomAccessFile(const std::string& fname,
                                      RandomAccessFile** result) = 0;
 
+  // 创建一个可写的文件对象。这个函数接收一个文件名，并返回一个 `WritableFile` 指针。`WritableFile` 类提供了一个 `Append` 函数，用于向文件中追加数据。
   // Create an object that writes to a new file with the specified
   // name.  Deletes any existing file with the same name and creates a
   // new file.  On success, stores a pointer to the new file in
@@ -95,6 +130,7 @@ class LEVELDB_EXPORT Env {
   virtual Status NewWritableFile(const std::string& fname,
                                  WritableFile** result) = 0;
 
+  // // 创建一个对象，该对象要么附加到现有文件，要么写入新文件（如果该文件一开始不存在）。 // 成功时，将指向新文件的指针存储在 *result 中并 // 返回 OK。失败时将 nullptr 存储在 *result 中并返回 // 不正常。 // // 返回的文件一次只能被一个线程访问。 // // 如果此 Env 不允许附加到现有文件，则可能会返回 IsNotSupportedError 错误。 Env 的用户（包括 // leveldb 实现）必须准备好处理 // 不支持附加的 Env。
   // Create an object that either appends to an existing file, or
   // writes to a new file (if the file does not exist to begin with).
   // On success, stores a pointer to the new file in *result and
