@@ -4,17 +4,30 @@
 #include <string>
 void new_iterator(leveldb::DB* pDb);
 void get_approximate_sizes(leveldb::DB* db);
+
+void EncodeFixed32(char* dst, uint32_t value);
 int main() {
+  std::cout << (1<< 21) << ' ';
+
+//  char buffer[4];
+//  uint32_t value = 123456789;
+//
+//  EncodeFixed32(buffer, value);
+//
+//  for (int i = 0; i < 4; i++) {
+//    std::cout << static_cast<int>(buffer[i]) << ' ';
+//  }
+
   leveldb::DB *db;
   leveldb::Options options;
   options.create_if_missing = true;
   leveldb::Status status = leveldb::DB::Open(options, "/Users/ralaphao/tmp/leveldb/t_user", &db);
   assert(status.ok());
   std::cout << "leveldb open success!" << std::endl;
-//  std::string value;
-//  std::string key = "testkey1";
-//  leveldb::Status s = db->Get(leveldb::ReadOptions(), key1, &value);
-
+////  std::string value;
+////  std::string key = "testkey1";
+////  leveldb::Status s = db->Get(leveldb::ReadOptions(), key1, &value);
+//
   for (int i = 0; i < 1000000; ++i) {
     std::string key = "test-key-" + std::to_string(i);
     std::string value = "test-value-" + std::to_string(i);
@@ -95,3 +108,13 @@ void get_approximate_sizes(leveldb::DB* db) {
   delete db;
 }
 
+
+
+void EncodeFixed32(char* dst, uint32_t value) {
+  uint8_t* const buffer = reinterpret_cast<uint8_t*>(dst);
+
+  buffer[0] = static_cast<uint8_t>(value);
+  buffer[1] = static_cast<uint8_t>(value >> 8);
+  buffer[2] = static_cast<uint8_t>(value >> 16);
+  buffer[3] = static_cast<uint8_t>(value >> 24);
+}

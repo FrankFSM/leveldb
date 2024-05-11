@@ -11,37 +11,6 @@
 // multiple threads without any external synchronization.
 
 
-/**
- * `env.h` 文件定义了 `Env` 类，它是 LevelDB 的环境抽象类。`Env` 类提供了一组虚函数，用于访问操作系统相关的功能，如文件 I/O、线程、互斥锁、时间等。以下是 `Env` 类及其成员的详细说明：
-
-1. `Env` 类：此类提供了操作系统相关功能的抽象接口。它包含以下虚函数：
-
-
-    - `CreateDir`：创建一个目录。这个函数接收一个目录名，并返回一个 `Status` 对象，表示操作是否成功。
-
-    - `DeleteFile`：删除一个文件。这个函数接收一个文件名，并返回一个 `Status` 对象，表示操作是否成功。
-
-    - `GetFileSize`：获取一个文件的大小。这个函数接收一个文件名，并返回一个文件大小。
-
-    - `RenameFile`：重命名一个文件。这个函数接收两个文件名，分别表示源文件名和目标文件名，并返回一个 `Status` 对象，表示操作是否成功。
-
-    - `LockFile`：锁定一个文件。这个函数接收一个文件名，并返回一个 `FileLock` 指针。`FileLock` 类表示一个文件锁，用于防止多个进程同时访问同一个文件。
-
-    - `UnlockFile`：解锁一个文件。这个函数接收一个 `FileLock` 指针，并返回一个 `Status` 对象，表示操作是否成功。
-
-    - `GetTestDirectory`：获取一个用于测试的目录。这个函数返回一个目录名，用于存储测试文件。
-
-    - `NewLogger`：创建一个日志记录器对象。这个函数接收一个文件名，并返回一个 `Logger` 指针。`Logger` 类提供了一个 `Logv` 函数，用于记录日志信息。
-
-    - `NowMicros`：获取当前的微秒数。这个函数返回一个 64 位整数，表示从某个固定时间点（如 Unix 纪元）到现在的微秒数。
-
-    - `SleepForMicroseconds`：让当前线程睡眠指定的微秒数。这个函数接收一个 32 位整数，表示睡眠的微秒数。
-
-          2. `EnvWrapper` 类：此类是 `Env` 类的一个简单包装器，它将所有函数调用委托给另一个 `Env` 对象。这个类可以用于实现一些特殊的环境，例如跟踪文件访问、限制 I/O 速率等。你可以通过继承 `EnvWrapper` 类并覆盖其中的部分函数来实现自定义的环境。
-
-          LevelDB 提供了一个默认的 `Env` 实现，它使用操作系统的文件系统和时钟。你可以通过 `Env::Default()` 函数获取这个默认实现的实例。此外，你还可以实现自定义的 `Env` 类，以支持其他平台或存储后端。例如，你可以实现一个基于内存的 `Env` 类，用于加速测试；或者实现一个基于分布式文件系统的 `Env` 类，用于实现分布式数据库。
- */
-
 #ifndef STORAGE_LEVELDB_INCLUDE_ENV_H_
 #define STORAGE_LEVELDB_INCLUDE_ENV_H_
 
@@ -80,6 +49,10 @@ class SequentialFile;
 class Slice;
 class WritableFile;
 
+/**
+ * LevelDB 的环境抽象类。`Env` 类提供了一组虚函数，
+ * 用于访问操作系统相关的功能，如文件 I/O、线程、互斥锁、时间等
+ */
 class LEVELDB_EXPORT Env {
  public:
   Env();
@@ -130,7 +103,13 @@ class LEVELDB_EXPORT Env {
   virtual Status NewWritableFile(const std::string& fname,
                                  WritableFile** result) = 0;
 
-  // // 创建一个对象，该对象要么附加到现有文件，要么写入新文件（如果该文件一开始不存在）。 // 成功时，将指向新文件的指针存储在 *result 中并 // 返回 OK。失败时将 nullptr 存储在 *result 中并返回 // 不正常。 // // 返回的文件一次只能被一个线程访问。 // // 如果此 Env 不允许附加到现有文件，则可能会返回 IsNotSupportedError 错误。 Env 的用户（包括 // leveldb 实现）必须准备好处理 // 不支持附加的 Env。
+  /**
+   * 创建一个对象，该对象要么附加到现有文件，要么写入新文件（如果该文件一开始不存在）。
+   * 成功时，将指向新文件的指针存储在 *result 中并返回 OK
+   * 失败时将 nullptr 存储在 *result 中并返回不正常
+   * 返回的文件一次只能被一个线程访问。
+   * 如果此 Env 不允许附加到现有文件，则可能会返回 IsNotSupportedError 错误。 Env 的用户（包括leveldb实现）必须准备好处理不支持附加的 Env。
+   */
   // Create an object that either appends to an existing file, or
   // writes to a new file (if the file does not exist to begin with).
   // On success, stores a pointer to the new file in *result and
@@ -174,6 +153,11 @@ class LEVELDB_EXPORT Env {
   // A future release will remove this method.
   virtual Status DeleteFile(const std::string& fname);
 
+  /**
+   * 创建一个目录。这个函数接收一个目录名，并返回一个 `Status` 对象，表示操作是否成功。
+   * @param dirname
+   * @return
+   */
   // Create the specified directory.
   virtual Status CreateDir(const std::string& dirname) = 0;
 
@@ -254,6 +238,11 @@ class LEVELDB_EXPORT Env {
   virtual void SleepForMicroseconds(int micros) = 0;
 };
 
+/**
+ * 一个文件抽象类，用于以顺序方式读取文件。它提供了一些基本的文件读取操作，如 `Read` 和 `Skip`，并要求外部同步（即，调用者需要确保多线程环境下的线程安全）。
+ * 在 LevelDB 的不同平台实现中，你会看到针对特定平台的 `SequentialFile` 子类，
+ * 如 POSIX 文件系统的 `PosixSequentialFile` 类或 Windows 文件系统的 `WinSequentialFile` 类。这些子类为 `Read` 和 `Skip` 方法提供了具体的实现，以便在特定平台上以顺序方式读取文件。
+ */
 // A file abstraction for reading sequentially through a file
 class LEVELDB_EXPORT SequentialFile {
  public:
@@ -264,6 +253,12 @@ class LEVELDB_EXPORT SequentialFile {
 
   virtual ~SequentialFile();
 
+  /**
+   * 文件中读取最多 `n` 个字节。调用者需要提供一个 `char` 类型的缓冲区 `scratch`，用于存储读取到的数据。
+   * `Read` 方法将设置 `Slice` 类型的指针 `result`，指向读取到的数据。
+   * 如果在读取过程中遇到错误，`Read` 方法将返回一个非 OK 的状态。
+   * 注意，`Read` 方法要求外部同步，即调用者需要确保在多线程环境下的线程安全。
+   */
   // Read up to "n" bytes from the file.  "scratch[0..n-1]" may be
   // written by this routine.  Sets "*result" to the data that was
   // read (including if fewer than "n" bytes were successfully read).
@@ -274,6 +269,11 @@ class LEVELDB_EXPORT SequentialFile {
   // REQUIRES: External synchronization
   virtual Status Read(size_t n, Slice* result, char* scratch) = 0;
 
+  /**
+   * 跳过文件中的 `n` 个字节。
+   * `Skip` 方法保证跳过数据的速度不会慢于读取相同数据的速度，但可能更快。
+   * 如果到达文件末尾，跳过操作将停止在文件末尾，并返回 OK 状态。与 `Read` 方法一样，`Skip` 方法也要求外部同步。
+   */
   // Skip "n" bytes from the file. This is guaranteed to be no
   // slower that reading the same data, but may be faster.
   //
@@ -283,7 +283,9 @@ class LEVELDB_EXPORT SequentialFile {
   // REQUIRES: External synchronization
   virtual Status Skip(uint64_t n) = 0;
 };
-
+/**
+ * 用于随机读取文件内容。这个类是用于LevelDB（一种快速键值存储库）的导出，它支持随机访问文件内容。
+ */
 // A file abstraction for randomly reading the contents of a file.
 class LEVELDB_EXPORT RandomAccessFile {
  public:
@@ -303,6 +305,10 @@ class LEVELDB_EXPORT RandomAccessFile {
   // status.
   //
   // Safe for concurrent use by multiple threads.
+  /**
+   * 从文件的指定偏移量开始读取最多 `n` 个字节。
+   * Read方法是线程安全的，这意味着可以在多个线程之间并发使用，而不会导致数据竞争或不一致。
+   */
   virtual Status Read(uint64_t offset, size_t n, Slice* result,
                       char* scratch) const = 0;
 };
@@ -310,6 +316,9 @@ class LEVELDB_EXPORT RandomAccessFile {
 // A file abstraction for sequential writing.  The implementation
 // must provide buffering since callers may append small fragments
 // at a time to the file.
+/**
+ * 用于顺序写入文件。实现这个类的时候需要提供缓冲，因为调用者可能一次只向文件追加很小的片段
+ */
 class LEVELDB_EXPORT WritableFile {
  public:
   WritableFile() = default;
@@ -319,9 +328,21 @@ class LEVELDB_EXPORT WritableFile {
 
   virtual ~WritableFile();
 
+  /**
+   * 数据追加到文件中
+   */
   virtual Status Append(const Slice& data) = 0;
+  /**
+   * 关闭文件，当不再需要写入文件时，应该调用此方法以释放相关资源。
+   */
   virtual Status Close() = 0;
+  /**
+   * 将缓冲区中的数据写入文件。当需要确保已追加的数据被写入文件时
+   */
   virtual Status Flush() = 0;
+  /**
+   * 将文件的数据同步到磁盘。当需要确保已写入文件的数据被持久化到磁盘时
+   */
   virtual Status Sync() = 0;
 };
 
@@ -339,6 +360,10 @@ class LEVELDB_EXPORT Logger {
   virtual void Logv(const char* format, std::va_list ap) = 0;
 };
 
+/**
+ * 标识被锁定的文件。
+ * 作为一个标识接口，表示一个文件已经被锁定
+ */
 // Identifies a locked file.
 class LEVELDB_EXPORT FileLock {
  public:
@@ -368,6 +393,9 @@ LEVELDB_EXPORT Status ReadFileToString(Env* env, const std::string& fname,
 // An implementation of Env that forwards all calls to another Env.
 // May be useful to clients who wish to override just part of the
 // functionality of another Env.
+/**
+ * 通过装饰器模式，在不修改原始类的基础上，动态地扩展Env类的功能
+ */
 class LEVELDB_EXPORT EnvWrapper : public Env {
  public:
   // Initialize an EnvWrapper that delegates all calls to *t.

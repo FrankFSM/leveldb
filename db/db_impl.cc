@@ -1526,12 +1526,20 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
 
 DB::~DB() = default;
 
+/**
+ * 是一个线程安全的库，支持多线程并发操作。虽然同时打开同一个数据库会被阻止，但是一旦数据库被打开，多个线程可以同时进行读写操作
+ * @param options 选项
+ * @param dbname 数据库名
+ * @param dbptr 数据库指针
+ * @return  返回状态
+ */
 Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
   *dbptr = nullptr;
 
   // 创建DB实现
   DBImpl* impl = new DBImpl(options, dbname);
   // 锁定DBImpl对象的互斥锁，确保在数据库恢复过程中不会有其他线程修改数据库状态。
+  // 如果多个线程同时调用它来打开同一个数据库，那么只有第一个线程会成功打开数据库，其他线程会收到一个错误
   impl->mutex_.Lock();
   // 创建一个VersionEdit对象，在数据库恢复过程中记录一系列的元数据更改。
   VersionEdit edit;
