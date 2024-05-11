@@ -206,36 +206,49 @@ DBImpl::~DBImpl() {
   }
 }
 
+/**
+ * 创建一个新的数据库
+ * 1. 创建mainfest文件，并将配置信息写入manifest文件
+ * 2. 创建CURRENT文件，并将manifest文件名写入CURRENT文件
+ */
 Status DBImpl::NewDB() {
+  // 创建一个新的数据库，并初始化配置信息
   VersionEdit new_db;
   new_db.SetComparatorName(user_comparator()->Name());
   new_db.SetLogNumber(0);
   new_db.SetNextFile(2);
   new_db.SetLastSequence(0);
 
+  // 生成manifest文件名
   const std::string manifest = DescriptorFileName(dbname_, 1);
+  // 创建一个新的manifest文件
   WritableFile* file;
   Status s = env_->NewWritableFile(manifest, &file);
   if (!s.ok()) {
     return s;
   }
   {
+    // 将配置信息写入manifest文件
     log::Writer log(file);
     std::string record;
+    // 将配置信息序列化
     new_db.EncodeTo(&record);
     s = log.AddRecord(record);
     if (s.ok()) {
+      // 将manifest文件刷入磁盘
       s = file->Sync();
     }
     if (s.ok()) {
+      // 关闭manifest文件
       s = file->Close();
     }
   }
   delete file;
   if (s.ok()) {
-    // Make "CURRENT" file that points to the new manifest file.
+    // 设置"CURRENT"文件，指向新的manifest文件
     s = SetCurrentFile(env_, dbname_, 1);
   } else {
+    // 如果出现错误，删除manifest文件
     env_->RemoveFile(manifest);
   }
   return s;
@@ -327,7 +340,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
   // may already exist from a previous failed creation attempt.
   env_->CreateDir(dbname_);
   assert(db_lock_ == nullptr);
-  // 对数据库文件加锁。这是为了防止多个进程同时访问同一个数据库文件
+  // 对数据库文件.`/LOCK`加锁。这是为了防止多个进程同时访问同一个数据库文件
   Status s = env_->LockFile(LockFileName(dbname_), &db_lock_);
   if (!s.ok()) {
     return s;
@@ -338,21 +351,25 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
       // 文件不存在、开启创建
       Log(options_.info_log, "Creating DB %s since it was missing.",
           dbname_.c_str());
+      // 创建一个新的数据库
       s = NewDB();
       if (!s.ok()) {
         return s;
       }
     } else {
+      // 文件不存在、不允许创建，直接返回错误
       return Status::InvalidArgument(
           dbname_, "does not exist (create_if_missing is false)");
     }
   } else {
+    // 文件存在, 如果开启了错误检查, 直接返回错误
     if (options_.error_if_exists) {
       return Status::InvalidArgument(dbname_,
                                      "exists (error_if_exists is true)");
     }
   }
 
+  // 读取CURRENT文件，获取当前的manifest文件
   s = versions_->Recover(save_manifest);
   if (!s.ok()) {
     return s;

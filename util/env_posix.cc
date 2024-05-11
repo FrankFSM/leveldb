@@ -466,12 +466,20 @@ class PosixWritableFile final : public WritableFile {
 
 int LockOrUnlock(int fd, bool lock) {
   errno = 0;
+  // 定义一个名为file_lock_info的结构体变量，它是一个::flock类型的结构体。这个结构体用于描述文件锁定的信息。
   struct ::flock file_lock_info;
+  // 将file_lock_info的所有成员变量都初始化为0。
   std::memset(&file_lock_info, 0, sizeof(file_lock_info));
+  // 设置file_lock_info的l_type成员变量为F_WRLCK或F_UNLCK，以指定是加锁还是解锁。
   file_lock_info.l_type = (lock ? F_WRLCK : F_UNLCK);
+  // 设置file_lock_info的l_whence成员变量为SEEK_SET，以指定锁定的起始位置。
   file_lock_info.l_whence = SEEK_SET;
+  // 设置file_lock_info的l_start成员变量为0，以指定锁定的起始位置。
   file_lock_info.l_start = 0;
+  // 设置file_lock_info的l_len成员变量为0，以指定锁定的长度。
   file_lock_info.l_len = 0;  // Lock/unlock entire file.
+  // 调用fcntl函数，对fd指定的文件进行加锁或解锁操作。
+  // 如果已加锁，那么fcntl函数会返回-1，并将errno设置为EAGAIN。
   return ::fcntl(fd, F_SETLK, &file_lock_info);
 }
 
@@ -570,8 +578,12 @@ class PosixEnv : public Env {
     return status;
   }
 
+  /**
+   * 创建一个WritableFile对象，用于写入文件。
+   */
   Status NewWritableFile(const std::string& filename,
                          WritableFile** result) override {
+    // 调用open函数，打开文件，如果文件不存在，则创建文件。
     int fd = ::open(filename.c_str(),
                     O_TRUNC | O_WRONLY | O_CREAT | kOpenBaseFlags, 0644);
     if (fd < 0) {
@@ -656,16 +668,19 @@ class PosixEnv : public Env {
   Status LockFile(const std::string& filename, FileLock** lock) override {
     *lock = nullptr;
 
+    // 打开文件，如果文件不存在则创建
     int fd = ::open(filename.c_str(), O_RDWR | O_CREAT | kOpenBaseFlags, 0644);
     if (fd < 0) {
       return PosixError(filename, errno);
     }
 
+    // 将文件名加入到锁集合中，防止同一个文件被多次加锁
     if (!locks_.Insert(filename)) {
       ::close(fd);
       return Status::IOError("lock " + filename, "already held by process");
     }
 
+    // 对文件枷锁
     if (LockOrUnlock(fd, true) == -1) {
       int lock_errno = errno;
       ::close(fd);

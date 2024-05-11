@@ -858,6 +858,11 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
   return s;
 }
 
+/**
+ * 恢复数据库
+ * @param save_manifest
+ * @return
+ */
 Status VersionSet::Recover(bool* save_manifest) {
   struct LogReporter : public log::Reader::Reporter {
     Status* status;
@@ -867,20 +872,26 @@ Status VersionSet::Recover(bool* save_manifest) {
   };
 
   // Read "CURRENT" file, which contains a pointer to the current manifest file
+  // 读取CURRENT文件，该文件包含指向当前manifest文件的指针
   std::string current;
   Status s = ReadFileToString(env_, CurrentFileName(dbname_), &current);
   if (!s.ok()) {
     return s;
   }
+  // 如果current为空或者current的最后一个字符不是'\n'，则返回错误
   if (current.empty() || current[current.size() - 1] != '\n') {
     return Status::Corruption("CURRENT file does not end with newline");
   }
+  // 去掉current最后的'\n'
   current.resize(current.size() - 1);
-
+  // 生成CURRENT文件的路径
   std::string dscname = dbname_ + "/" + current;
+  // 顺序读取CURRENT文件
   SequentialFile* file;
   s = env_->NewSequentialFile(dscname, &file);
+  // 如果打开文件失败，则返回错误
   if (!s.ok()) {
+    // 如果文件不存在，则返回错误
     if (s.IsNotFound()) {
       return Status::Corruption("CURRENT points to a non-existent file",
                                 s.ToString());

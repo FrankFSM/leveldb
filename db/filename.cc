@@ -40,6 +40,11 @@ std::string SSTTableFileName(const std::string& dbname, uint64_t number) {
   return MakeFileName(dbname, number, "sst");
 }
 
+/**
+ * 生成MANIFEST文件名
+ * @param dbname 数据库名
+ * @param number 版本号
+ */
 std::string DescriptorFileName(const std::string& dbname, uint64_t number) {
   assert(number > 0);
   char buf[100];
@@ -48,6 +53,13 @@ std::string DescriptorFileName(const std::string& dbname, uint64_t number) {
   return dbname + buf;
 }
 
+/**
+ * CURRENT文件是一个非常重要的元数据文件，它的作用是记录当前活跃的数据库版本。具体来说，/CURRENT文件包含对当前活跃的数据库MANIFEST文件的引用
+ *
+ * 使用MANIFEST文件来保存数据库的元数据和状态。随着数据库的更新（例如插入、删除操作）
+ * ，LevelDB会创建、合并或删除SSTable文件。在这个过程中，LevelDB会将这些更改记录在MANIFEST文件中。
+ * 为了确保数据库在崩溃或重新启动后能够恢复到一致的状态，LevelDB需要知道在任何给定时刻哪个MANIFEST文件是活跃的
+ */
 std::string CurrentFileName(const std::string& dbname) {
   return dbname + "/CURRENT";
 }
@@ -68,13 +80,14 @@ std::string OldInfoLogFileName(const std::string& dbname) {
   return dbname + "/LOG.old";
 }
 
+
 // Owned filenames have the form:
-//    dbname/CURRENT
-//    dbname/LOCK
-//    dbname/LOG
-//    dbname/LOG.old
-//    dbname/MANIFEST-[0-9]+
-//    dbname/[0-9]+.(log|sst|ldb)
+//    dbname/CURRENT  当前活跃的数据库版本
+//    dbname/LOCK   用于数据库的文件锁
+//    dbname/LOG   用于记录数据库的日志
+//    dbname/LOG.old  用于记录数据库的旧日志
+//    dbname/MANIFEST-[0-9]+  用于记录数据库的元数据和状态
+//    dbname/[0-9]+.(log|sst|ldb) 用于存储数据库的数据
 bool ParseFileName(const std::string& filename, uint64_t* number,
                    FileType* type) {
   Slice rest(filename);
@@ -120,16 +133,30 @@ bool ParseFileName(const std::string& filename, uint64_t* number,
   return true;
 }
 
+/**
+ * 设置当前活跃的数据库版本
+ * 首先生成临时文件，将MANIFEST文件名写入临时文件，然后将临时文件重命名为CURRENT文件
+ * 这样做的作用：
+ *  保证CURRENT文件的原子性和一致性
+ *  创建文件和写入内容是在临时文件上进行的，只有在写入成功后才会将临时文件重命名为CURRENT文件
+ *  重命名操作是原子的，这样可以保证CURRENT文件的一致性
+ */
 Status SetCurrentFile(Env* env, const std::string& dbname,
                       uint64_t descriptor_number) {
   // Remove leading "dbname/" and add newline to manifest file name
+  // 生成MANIFEST文件名
   std::string manifest = DescriptorFileName(dbname, descriptor_number);
   Slice contents = manifest;
+  // 断言contents以dbname + "/"开头
   assert(contents.starts_with(dbname + "/"));
+  // 移除dbname + "/"前缀
   contents.remove_prefix(dbname.size() + 1);
+  // 生成临时文件名: 000001.dbtmp
   std::string tmp = TempFileName(dbname, descriptor_number);
+  // 将MANIFEST文件名写入临时文件
   Status s = WriteStringToFileSync(env, contents.ToString() + "\n", tmp);
   if (s.ok()) {
+    // 将临时文件重命名为CURRENT文件
     s = env->RenameFile(tmp, CurrentFileName(dbname));
   }
   if (!s.ok()) {
